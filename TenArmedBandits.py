@@ -18,7 +18,7 @@ class Bandit(object):
         self.best_action = np.argmax(self.means)
 
     def get_reward_samples(self, dim=2000):
-        # for generating figure 2.1
+        # specifically for generating figure 2.1
         random_samples = np.random.multivariate_normal(self.means, np.eye(self.num_arms), size=[dim])
         return random_samples
 
@@ -55,6 +55,7 @@ class Agent(object):
         self.values_est = [self.initial_value] * self.num_arm
         self.action_counts = [0] * self.num_arm
         self.time_step = 0
+        self.average_reward = 0
 
     def get_action(self):
         # probability with respect to explore
@@ -99,23 +100,17 @@ class Agent(object):
             self.values_est[K] += self.step_size * (reward - self.values_est[K])
 
 
-def figure2_1(bandit, dim=2000):
-    plt.figure(1)
-    sns.violinplot(data=bandit.get_reward_samples(dim=dim))
-    plt.xlabel("Action")
-    plt.ylabel("Reward distribution")
-
-
-def play_game(num_bandits, time_steps, agents):
-    best_action_counts = np.asarray([np.zeros(time_steps, dtype='float') for _ in range(len(agents))])
-    rewards = np.asarray([np.zeros(time_steps, dtype='float') for _ in range(len(agents))])
+# game play function for all the image generating functions
+def play_game(num_bandits, episode_length, agents, bandit_ini_mean=0.):
+    best_action_counts = np.asarray([np.zeros(episode_length, dtype='float') for _ in range(len(agents))])
+    rewards = np.asarray([np.zeros(episode_length, dtype='float') for _ in range(len(agents))])
 
     for i in range(num_bandits):
-        bandit = Bandit()
+        bandit = Bandit(mean=bandit_ini_mean)
         for agent_idx, agent in enumerate(agents):
             # remember resetting the status of agent when it comes into a new episode
             agent.reset()
-            for t in range(time_steps):
+            for t in range(episode_length):
                 action = agent.get_action()
                 reward = bandit.take_arm(action)
                 agent.update_values(action, reward)
@@ -123,27 +118,94 @@ def play_game(num_bandits, time_steps, agents):
                 if action == bandit.best_action:
                     best_action_counts[agent_idx][t] += 1
 
-    return best_action_counts/num_bandits, rewards/num_bandits
+    return best_action_counts / num_bandits, rewards / num_bandits
+
+
+figure_index = 0
+
+
+# function for visualising k-armed bandit rewards
+def figure2_1(bandit, dim=2000):
+    global figure_index
+    plt.figure(figure_index)
+    figure_index += 1
+    sns.violinplot(data=bandit.get_reward_samples(dim=dim))
+    plt.xlabel("Action")
+    plt.ylabel("Reward distribution")
 
 
 # generate figure 2.2
-def epsilon_greedy(num_bandits, time_step):
+def epsilon_greedy(num_bandits, episode_length):
     epsilons = [0., 0.1, 0.01]
     agents = []
     for ep_idx, ep in enumerate(epsilons):
         agents.append(Agent(epsilon=ep, sample_average=True))
-    best_action_counts, average_rewards = play_game(num_bandits, time_step, agents)
-    plt.figure(2)
+    best_action_counts, average_rewards = play_game(num_bandits, episode_length, agents)
+    global figure_index
+    plt.figure(figure_index)
+    figure_index += 1
     for eps, counts in zip(epsilons, best_action_counts):
         plt.plot(counts, label='epsilon = ' + str(eps))
     plt.xlabel('Steps')
     plt.ylabel('% optimal action')
     plt.legend()
-    plt.figure(3)
+    plt.figure(figure_index)
+    figure_index += 1
     for eps, rewards in zip(epsilons, average_rewards):
         plt.plot(rewards, label='epsilon = ' + str(eps))
     plt.xlabel('Steps')
     plt.ylabel('average reward')
+    plt.legend()
+
+
+# generate figure 2.3
+def optimal_initial_values(num_bandits, episode_length):
+    agents = [Agent(epsilon=0, initial_value=5, step_size=.1),
+              Agent(epsilon=0.1, initial_value=0, step_size=0.1)]
+    best_action_counts, _ = play_game(num_bandits, episode_length, agents)
+    global figure_index
+    plt.figure(figure_index)
+    plt.plot(best_action_counts[0], label='epsilon = 0, q = 5')
+    plt.plot(best_action_counts[1], label='epsilon = 0.1, q = 0')
+    plt.xlabel('Steps')
+    plt.ylabel('% optimal action')
+    plt.legend()
+
+
+# for figure 2.4
+def ucb(num_bandits, episode_length):
+    agents = [Agent(epsilon=0, step_size=0.1, UCB_param=2),
+              Agent(epsilon=0.1, step_size=0.1)]
+    _, avg_rewards = play_game(num_bandits, episode_length, agents)
+    global figure_index
+    plt.figure(figure_index)
+    figure_index += 1
+    plt.plot(avg_rewards[0], label='UCB c = 2')
+    plt.plot(avg_rewards[1], label='epsilon greedy epsilon = 0.1')
+    plt.xlabel('Steps')
+    plt.ylabel('Average reward')
+    plt.legend()
+
+
+# for figure 2.5
+def gradient_algorithm(num_bandits, episode_length):
+    agents = [Agent(gradient=True, step_size=0.1, gradient_baseline=True),
+              Agent(gradient=True, step_size=0.1, gradient_baseline=False),
+              Agent(gradient=True, step_size=0.4, gradient_baseline=True),
+              Agent(gradient=True, step_size=0.4, gradient_baseline=False)]
+
+    best_action_counts, _ = play_game(num_bandits, episode_length, agents, 4.)
+    labels = ['alpha = 0.1, with baseline',
+              'alpha = 0.1, without baseline',
+              'alpha = 0.4, with baseline',
+              'alpha = 0.4, without baseline']
+    global figure_index
+    plt.figure(figure_index)
+    figure_index += 1
+    for i in range(0, len(agents)):
+        plt.plot(best_action_counts[i], label=labels[i])
+    plt.xlabel('Steps')
+    plt.ylabel('% Optimal action')
     plt.legend()
 
 
@@ -167,7 +229,7 @@ def play_1bandit_1agent():
         if action == bandit.best_action:
             right_times += 1
         avg_rewards.append(total_reward / t)
-        right_times_freq.append(right_times/t)
+        right_times_freq.append(right_times / t)
 
     plt.plot(right_times_freq, label='right freq')
     plt.plot(avg_rewards, label='avg reward')
@@ -199,7 +261,7 @@ def play_1bandit_3agents():
             if action == bandit.best_action:
                 right_times[agent_idx] += 1
             avg_rewards[agent_idx].append(total_reward[agent_idx] / t)
-            right_times_freq[agent_idx].append(right_times[agent_idx]/t)
+            right_times_freq[agent_idx].append(right_times[agent_idx] / t)
 
     plt.figure(1)
     for i in range(3):
@@ -238,5 +300,8 @@ def play_nbandit_1agent(num_bandit, time_step):
 
 
 if __name__ == '__main__':
-    epsilon_greedy(2000, 1000)
+    # epsilon_greedy(2000, 1000)
+    # optimal_initial_values(2000, 1000)
+    # ucb(2000, 1000)
+    gradient_algorithm(2000, 1000)
     plt.show()

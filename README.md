@@ -8,6 +8,9 @@ in Chapter 2.
     - [x] Bandit class
     - [x] Agent class
     - [x] epsilon-greedy algorithm
-    - [ ] optimistic initial values
-    - [ ] ucb
-    - [ ] gradient algorithm
+    - [x] optimistic initial values
+    - [x] ucb
+    - [x] gradient algorithm
+
+## Todo:
+1. Grid world in Chapter 3
