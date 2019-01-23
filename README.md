@@ -12,5 +12,10 @@ in Chapter 2.
     - [x] ucb
     - [x] gradient algorithm
 
+2. *GridWorld_Ch3.py*: code script regarding to example in Chapter 3
+    - [x] GridWorld
+    - [x] values estimated based on Bellman equation
+    - [x] values estimated based on Bellman optimal equation
+
 ## Todo:
-1. Grid world in Chapter 3
+1. Grid world in Chapter 4
