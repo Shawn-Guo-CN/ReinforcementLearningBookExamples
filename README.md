@@ -6,4 +6,8 @@ Reinforcement Learning: An Introduction.
 1. *TenArmedBandits.py*: code scrip regarding to the k-armed bandit problem 
 in Chapter 2.
     - [x] Bandit class
-    - [ ] Agent class
+    - [x] Agent class
+    - [x] epsilon-greedy algorithm
+    - [ ] optimistic initial values
+    - [ ] ucb
+    - [ ] gradient algorithm
