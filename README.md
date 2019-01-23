@@ -3,7 +3,7 @@ Example codes to implement the examples in Richard's book,
 Reinforcement Learning: An Introduction.
 
 ## Scripts
-1. *TenArmedBandits.py*: code scrip regarding to the k-armed bandit problem 
+1. *1TenArmedBandits.py*: code scrip regarding to the k-armed bandit problem 
 in Chapter 2.
     - [x] Bandit class
     - [x] Agent class
@@ -12,7 +12,7 @@ in Chapter 2.
     - [x] ucb
     - [x] gradient algorithm
 
-2. *GridWorld_Ch3.py*: code script regarding to example in Chapter 3
+2. *2GridWorld_Ch3.py*: code script regarding to example in Chapter 3
     - [x] GridWorld
     - [x] values estimated based on Bellman equation
     - [x] values estimated based on Bellman optimal equation
