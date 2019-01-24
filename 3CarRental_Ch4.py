@@ -8,8 +8,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.stats import poisson
+from math import *
 
-THETA = 1e-4
+THETA = 100
 
 
 class JackRentalCompany(object):
@@ -27,7 +28,7 @@ class JackRentalCompany(object):
 
     def get_expected_return(self, state, action, values_est, gamma=0.9, approximate_return=True):
         G = 0.0
-        G -= self.move_cost * action
+        G -= self.move_cost * abs(action)
 
         # execute action
         num_cars_1st = int(min(state[0] - action, self.max_capacity))
@@ -82,8 +83,9 @@ class Agent(object):
 
         error_sum = np.sum(np.abs(old_values_est - self.values_est))
         print('\t\terror sum:', error_sum)
-        if np.sum(np.abs(old_values_est - self.values_est)) < THETA:
+        if error_sum < THETA:
             policy_converged = True
+        del old_values_est
 
         return policy_converged
 
@@ -117,6 +119,7 @@ def policy_iterate(company, agent):
             eva_iter_num += 1
             print('[Evaluation]doing %d-th time policy evaluation' % eva_iter_num)
             policy_evaluation_converge_flag = agent.policy_evaluate(company)
+        eva_iter_num = 0
 
         improve_iter_num += 1
         print('[Improvement]doing %d-th time policy improvement' % improve_iter_num)

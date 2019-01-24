@@ -106,3 +106,4 @@ venv.bak/
 
 # added by Shawn
 .idea
+*tmp*
