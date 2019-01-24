@@ -17,8 +17,8 @@ class JackRentalCompany(object):
         self.max_capacity = max_capacity
         self.max_move = max_move
 
-        self.rental_credit = 10
-        self.move_cost = 2
+        self.rental_credit = 10.
+        self.move_cost = 2.
 
         self.lambda_request_1st = lambdas[0]
         self.lambda_request_2nd = lambdas[1]
@@ -33,8 +33,8 @@ class JackRentalCompany(object):
         num_cars_1st = int(min(state[0] - action, self.max_capacity))
         num_cars_2nd = int(min(state[1] + action, self.max_capacity))
 
-        for rental_request_1st in range(state[0] + 1):
-            for rental_request_2nd in range(state[1] + 1):
+        for rental_request_1st in range(num_cars_1st + 1):
+            for rental_request_2nd in range(num_cars_2nd + 1):
                 # here, we assume all rental requests are given before any return
                 num_rental_1st = min(num_cars_1st, rental_request_1st)
                 num_rental_2nd = min(num_cars_2nd, rental_request_2nd)
@@ -78,7 +78,10 @@ class Agent(object):
 
         for state in self.states:
             self.values_est[state[0], state[1]] = \
-                company.get_expected_return(state, self.policy[state[0], state[1]], self.values_est, self.gamma)
+                company.get_expected_return(state, self.policy[state[0], state[1]], old_values_est, self.gamma)
+            if not self.values_est[state[0], state[1]] == old_values_est[state[0], state[1]]:
+                print('not equal')
+
         if np.sum(np.abs(old_values_est - self.values_est)) < THETA:
             policy_converged = True
 
@@ -96,7 +99,7 @@ class Agent(object):
                     action_returns.append(company.get_expected_return(state, action, self.values_est, self.gamma))
                 else:
                     action_returns.append(-float('inf'))
-            self.policy[state[0], state[1]] = np.argmax(action_returns)
+            self.policy[state[0], state[1]] = self.action_space[np.argmax(action_returns)]
             if not old_action == self.policy[state[0], state[1]]:
                 policy_stable = False
                 num_policy_changes += 1
