@@ -74,14 +74,14 @@ class Agent(object):
     def policy_evaluate(self, company):
         policy_converged = False
 
-        old_values_est = self.values_est
+        old_values_est = self.values_est.copy()
 
         for state in self.states:
             self.values_est[state[0], state[1]] = \
                 company.get_expected_return(state, self.policy[state[0], state[1]], old_values_est, self.gamma)
-            if not self.values_est[state[0], state[1]] == old_values_est[state[0], state[1]]:
-                print('not equal')
 
+        error_sum = np.sum(np.abs(old_values_est - self.values_est))
+        print('\t\terror sum:', error_sum)
         if np.sum(np.abs(old_values_est - self.values_est)) < THETA:
             policy_converged = True
 
