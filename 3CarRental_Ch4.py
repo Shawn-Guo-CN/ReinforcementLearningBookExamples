@@ -9,12 +9,11 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.stats import poisson
 
-
 THETA = 1e-4
 
 
 class JackRentalCompany(object):
-    def __init__(self, max_capacity=20, max_move=5, lambdas=[3,4,3,2], rental_credit=10, move_cost=2):
+    def __init__(self, max_capacity=20, max_move=5, lambdas=[3, 4, 3, 2], rental_credit=10, move_cost=2):
         self.max_capacity = max_capacity
         self.max_move = max_move
 
@@ -51,9 +50,9 @@ class JackRentalCompany(object):
                 if approximate_return:
                     num_cars_return_1st = self.lambda_return_1st
                     num_cars_return_2nd = self.lambda_return_2nd
-                    num_cars_return_1st = min(num_cars_1st + num_cars_return_1st, self.max_capacity)
-                    num_cars_return_2nd = min(num_cars_2nd + num_cars_return_2nd, self.max_capacity)
-                    G += prob * (reward + gamma * values_est[num_cars_return_1st, num_cars_return_2nd])
+                    num_cars_1st = min(num_cars_1st + num_cars_return_1st, self.max_capacity)
+                    num_cars_2nd = min(num_cars_2nd + num_cars_return_2nd, self.max_capacity)
+                    G += prob * (reward + gamma * values_est[num_cars_1st, num_cars_2nd])
 
         return G
 
@@ -79,7 +78,7 @@ class Agent(object):
 
         for state in self.states:
             self.values_est[state[0], state[1]] = \
-                company.get_expected_return(state, self.policy[state[0]][state[1]], self.values_est, self.gamma)
+                company.get_expected_return(state, self.policy[state[0], state[1]], self.values_est, self.gamma)
         if np.sum(np.abs(old_values_est - self.values_est)) < THETA:
             policy_converged = True
 
@@ -90,15 +89,15 @@ class Agent(object):
         num_policy_changes = 0
 
         for state in self.states:
-            old_action = self.policy[state[0]][state[1]]
+            old_action = self.policy[state[0], state[1]]
             action_returns = []
             for action in self.action_space:
                 if (0 <= action <= state[0]) or (action < 0 and state[1] >= -action):
                     action_returns.append(company.get_expected_return(state, action, self.values_est, self.gamma))
                 else:
                     action_returns.append(-float('inf'))
-            self.policy[state[0]][state[1]] = np.argmax(action_returns)
-            if not old_action == self.policy[state[0]][state[1]]:
+            self.policy[state[0], state[1]] = np.argmax(action_returns)
+            if not old_action == self.policy[state[0], state[1]]:
                 policy_stable = False
                 num_policy_changes += 1
 
@@ -124,8 +123,7 @@ def policy_iterate(company, agent):
 
 
 # plot a policy/state value matrix
-figureIndex = 0
-def draw(data, labels, dim=21):
+def draw_matrix(data, labels, dim=21):
     AxisXPrint = []
     AxisYPrint = []
     pos = []
@@ -150,8 +148,8 @@ if __name__ == '__main__':
     company = JackRentalCompany()
     agent = Agent()
     policy_iterate(company, agent)
-    draw(agent.policy,
+    draw_matrix(agent.policy,
          ['# of cars in first location', '# of cars in second location', '# of cars to move during night'])
-    draw(agent.values_est,
+    draw_matrix(agent.values_est,
          ['# of cars in first location', '# of cars in second location', 'expected returns'])
     plt.show()
