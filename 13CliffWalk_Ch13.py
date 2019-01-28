@@ -76,7 +76,7 @@ def test_cliff_warlking_by_hand(cw):
     _, reward, terminate = cw.transmit_tensor[3][0][0]
     cw.show_pos()
     while not terminate:
-        action = input()
+        action = input('input your actoin (U/D/L/R):')
         new_pos, reward, terminate = cw.take_action(action)
         print(new_pos, reward, terminate)
         cw.show_pos()
@@ -84,7 +84,3 @@ def test_cliff_warlking_by_hand(cw):
 
 if __name__ == '__main__':
     cw = CliffWalking()
-
-
-
-
