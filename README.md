@@ -26,7 +26,7 @@ However, there still exists bug in *maybe* **get_expected_return** function.
     
 4. *13CliffWalking_Ch13.py*: code script for cliff walking problem in Chapter 13 with
 various methods.
-    - [ ] CliffWalk, class simulaitng the cliff walking game
+    - [x] CliffWalk, class simulaitng the cliff walking game
     - [ ] REINFORCE
     - [ ] REINFORCE with Baseline
     - [ ] Actor-Critic w/o eligibility trace
@@ -35,5 +35,4 @@ various methods.
 1. Car Rental in Chapter 4
 2. Various methods for solving Blackjack in Chapter 5
 3. Q-learning for Cliff Walking in Chapter 6
-4. REINFORCE with/without baseline for Corridor Grid World in Chapter 13
-5. Actor-Critic in Chapte 13 (but, for what?)
+4. Policy Gradient Methods for Cliff Walking problem in Chapter 13
