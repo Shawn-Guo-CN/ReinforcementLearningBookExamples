@@ -1,80 +1,63 @@
 import numpy as np
-import sys
 
 
-UP = 0
-RIGHT = 1
-DOWN = 2
-LEFT = 3
-
-class CliffWalking():
-    def _limit_coordinates(self, coord):
-        coord[0] = min(coord[0], self.shape[0] - 1)
-        coord[0] = max(coord[0], 0)
-        coord[1] = min(coord[1], self.shape[1] - 1)
-        coord[1] = max(coord[1], 0)
-        return coord
-
-    def _calculate_transition_prob(self, current, delta):
-        new_position = np.array(current) + np.array(delta)
-        new_position = self._limit_coordinates(new_position).astype(int)
-        new_state = np.ravel_multi_index(tuple(new_position), self.shape)
-        reward = -100.0 if self._cliff[tuple(new_position)] else -1.0
-        is_done = self._cliff[tuple(new_position)] or (tuple(new_position) == (3,11))
-        return [(1.0, new_state, reward, is_done)]
-
+class CliffWalking(object):
     def __init__(self):
         self.shape = (4, 12)
 
-        nS = np.prod(self.shape)
-        nA = 4
+        # always start from the left-dow corner
+        self.pos = np.asarray([self.shape[0] - 1, 0])
 
-        # Cliff Location
-        self._cliff = np.zeros(self.shape, dtype=np.bool)
-        self._cliff[3, 1:-1] = True
+        # build a
+        self.cliff = np.zeros(self.shape, dtype=np.bool)
+        self.cliff[-1, 1:-1] = 1
 
-        # Calculate transition probabilities
-        P = {}
-        for s in range(nS):
-            position = np.unravel_index(s, self.shape)
-            P[s] = { a : [] for a in range(nA) }
-            P[s][UP] = self._calculate_transition_prob(position, [-1, 0])
-            P[s][RIGHT] = self._calculate_transition_prob(position, [0, 1])
-            P[s][DOWN] = self._calculate_transition_prob(position, [1, 0])
-            P[s][LEFT] = self._calculate_transition_prob(position, [0, -1])
+        self.actions = {
+            'U': 0,
+            'D': 1,
+            'L': 2,
+            'R': 3
+        }
 
-        # We always start in state (3, 0)
-        isd = np.zeros(nS)
-        isd[np.ravel_multi_index((3,0), self.shape)] = 1.0
+        self.action2shift = {
+            0: [-1, 0],
+            1: [1, 0],
+            2: [0, -1],
+            3: [0, 1]
+        }
 
-        super(CliffWalkingEnv, self).__init__(nS, nA, P, isd)
+        self.transmit_tensor = self._build_transmit_tensor_()
 
-    def render(self, mode='human', close=False):
-        self._render(mode, close)
+    def _build_transmit_tensor_(self):
+        trans_matrix = [[[]]*self.shape[1]] * self.shape[0]
+        for i in range(self.shape[0]):
+            for j in range(self.shape[1]):
+                for a in range(len(self.actions)):
+                    trans_matrix[i][j].append(self._cal_new_position_((i, j), a))
 
-    def _render(self, mode='human', close=False):
-        if close:
-            return
+        return trans_matrix
 
-        outfile = StringIO() if mode == 'ansi' else sys.stdout
+    def _cal_new_position_(self, old_pos, action):
+        old_pos = np.asarray(old_pos)
+        new_pos = old_pos + self.action2shift[action]
+        new_pos[0] = min(new_pos[0], 0)
+        new_pos[0] = max(new_pos[0], self.shape[0] - 1)
+        new_pos[1] = min(new_pos[1], 0)
+        new_pos[1] = max(new_pos[1], self.shape[1] - 1)
+        if self.cliff[new_pos[0]][new_pos[1]]:
+            return np.asarray([self.shape[0] - 1, 0])
+        else:
+            return new_pos
 
-        for s in range(self.nS):
-            position = np.unravel_index(s, self.shape)
-            # print(self.s)
-            if self.s == s:
-                output = " x "
-            elif position == (3,11):
-                output = " T "
-            elif self._cliff[position]:
-                output = " C "
-            else:
-                output = " o "
+    def take_action(self):
+        pass
 
-            if position[1] == 0:
-                output = output.lstrip()
-            if position[1] == self.shape[1] - 1:
-                output = output.rstrip()
-                output += "\n"
+    def show_pos(self):
+        env = np.zeros(self.shape)
+        env[self.pos[0]][self.pos[1]] = 1
+        print(env)
 
-            outfile.write(output)
-        outfile.write("\n")
+
+if __name__ == '__main__':
+    cw = CliffWalking()
+    print(cw.transmit_tensor[3][0][:])
