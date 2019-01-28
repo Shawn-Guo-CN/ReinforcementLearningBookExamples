@@ -1,3 +1,4 @@
+import pprint
 import numpy as np
 
 
@@ -29,7 +30,7 @@ class CliffWalking(object):
         self.transmit_tensor = self._build_transmit_tensor_()
 
     def _build_transmit_tensor_(self):
-        trans_matrix = [[[]]*self.shape[1]] * self.shape[0]
+        trans_matrix = [[[] for _ in range(self.shape[1])] for __ in range(self.shape[0])]
         for i in range(self.shape[0]):
             for j in range(self.shape[1]):
                 for a in range(len(self.actions)):
@@ -40,17 +41,30 @@ class CliffWalking(object):
     def _cal_new_position_(self, old_pos, action):
         old_pos = np.asarray(old_pos)
         new_pos = old_pos + self.action2shift[action]
-        new_pos[0] = min(new_pos[0], 0)
-        new_pos[0] = max(new_pos[0], self.shape[0] - 1)
-        new_pos[1] = min(new_pos[1], 0)
-        new_pos[1] = max(new_pos[1], self.shape[1] - 1)
-        if self.cliff[new_pos[0]][new_pos[1]]:
-            return np.asarray([self.shape[0] - 1, 0])
-        else:
-            return new_pos
+        new_pos[0] = max(new_pos[0], 0)
+        new_pos[0] = min(new_pos[0], self.shape[0] - 1)
+        new_pos[1] = max(new_pos[1], 0)
+        new_pos[1] = min(new_pos[1], self.shape[1] - 1)
 
-    def take_action(self):
-        pass
+        reward = -1.
+        terminate = False
+
+        if self.cliff[old_pos[0]][old_pos[1]]:
+            reward = -100.
+            new_pos[0] = self.shape[0] - 1
+            new_pos[1] = 0
+            terminate = True
+
+        if old_pos[0] == self.shape[0] - 1 and old_pos[1] == self.shape[1] - 1:
+            terminate = True
+
+        return new_pos, reward, terminate
+
+    def take_action(self, action):
+        new_pos, reward, terminate = self.transmit_tensor[self.pos[0]][self.pos[1]][self.actions[action]]
+        self.pos[0] = new_pos[0]
+        self.pos[1] = new_pos[1]
+        return new_pos, reward, terminate
 
     def show_pos(self):
         env = np.zeros(self.shape)
@@ -58,6 +72,19 @@ class CliffWalking(object):
         print(env)
 
 
+def test_cliff_warlking_by_hand(cw):
+    _, reward, terminate = cw.transmit_tensor[3][0][0]
+    cw.show_pos()
+    while not terminate:
+        action = input()
+        new_pos, reward, terminate = cw.take_action(action)
+        print(new_pos, reward, terminate)
+        cw.show_pos()
+
+
 if __name__ == '__main__':
     cw = CliffWalking()
-    print(cw.transmit_tensor[3][0][:])
+
+
+
+
