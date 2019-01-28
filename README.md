@@ -24,9 +24,9 @@ However, there still exists bug in *maybe* **get_expected_return** function.
     - [x] *policy_improve* in Agent class
     - [ ] **debug!!!**
     
-4. *13CliffWalk_Ch13.py*: code script for cliff walk problem in Chapter 13 with
+4. *13CliffWalking_Ch13.py*: code script for cliff walking problem in Chapter 13 with
 various methods.
-    - [ ] CliffWalk, class simulaitng the cliff walk game
+    - [ ] CliffWalk, class simulaitng the cliff walking game
     - [ ] REINFORCE
     - [ ] REINFORCE with Baseline
     - [ ] Actor-Critic w/o eligibility trace
