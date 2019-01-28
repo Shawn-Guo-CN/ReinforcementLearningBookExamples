@@ -23,6 +23,13 @@ However, there still exists bug in *maybe* **get_expected_return** function.
     - [x] *policy_evaluate* in Agent class
     - [x] *policy_improve* in Agent class
     - [ ] **debug!!!**
+    
+4. *13CliffWalk_Ch13.py*: code script for cliff walk problem in Chapter 13 with
+various methods.
+    - [ ] CliffWalk, class simulaitng the cliff walk game
+    - [ ] REINFORCE
+    - [ ] REINFORCE with Baseline
+    - [ ] Actor-Critic w/o eligibility trace
 
 ## Todo:
 1. Car Rental in Chapter 4
