@@ -114,7 +114,8 @@ class REINFORCE(nn.Module):
         self.output_dim = output_dim
 
         self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, output_dim)
 
         for m in self.modules():
             # in case add more modules later
@@ -122,8 +123,9 @@ class REINFORCE(nn.Module):
                 nn.init.xavier_uniform_(m.weight)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        policy = F.softmax(self.fc2(x))
+        x = F.selu(self.fc1(x))
+        x = F.selu(self.fc2(x))
+        policy = F.softmax(self.fc3(x))
         return policy
 
     @classmethod
@@ -163,6 +165,59 @@ class REINFORCE(nn.Module):
         return action
 
 
+class ActorCritic(nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim=48):
+        super(ActorCritic, self).__init__()
+
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+
+        self.fc_hidden = nn.Linear(input_dim, hidden_dim)
+        self.fc_actor = nn.Linear(hidden_dim, output_dim)
+        self.fc_critic = nn.Linear(hidden_dim, output_dim)
+
+        for m in self.modules():
+            # in case add more modules later
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+
+    def forward(self, x):
+        x = F.selu(self.fc_hidden(x))
+        policy = F.softmax(self.fc_actor(x))
+        q_value = self.fc_critic(x)
+        return policy, q_value
+
+    @classmethod
+    def train_model(cls, model, transition, optimizer, gamma=1.0):
+        state, next_state, action, reward, mask = transition
+
+        policy, q_value = model(state)
+        policy, q_value = policy.view(-1, model.output_dim), q_value.view(-1, model.output_dim)
+        _, next_q_value = model(next_state)
+        next_q_value = next_q_value.view(-1, model.output_dim)
+        next_action = model.get_action(next_state)
+
+        target = reward + mask * gamma * next_q_value[0][next_action]
+
+        log_policy = torch.log(policy[0])[action]
+        loss_policy = - log_policy * q_value[0][action].item()
+        loss_value = F.mse_loss(q_value[0][action], target.detach())
+
+        loss = loss_policy + loss_value
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        return loss
+
+    def get_action(self, state):
+        policy, _ = self.forward(state)
+        policy = policy[0].data.numpy()
+
+        action = np.random.choice(self.output_dim, 1, p=policy)[0]
+        return action
+
+
 class ReplayPool(object):
     def __init__(self):
         self.memory = deque()
@@ -190,15 +245,7 @@ def test_cliff_warlking_by_hand(cw):
         cw.show_pos()
 
 
-def train_REINFORCE():
-    cw = CliffWalking()
-    input_dim = cw.state_dim
-    output_dim = cw.num_actions
-    print('state size:', input_dim)
-    print('action size:', output_dim)
-
-    model = REINFORCE(input_dim, output_dim)
-
+def train_model(env, model):
     optimizer = optim.RMSprop(model.parameters(), lr=lr)
 
     model.to(device)
@@ -206,7 +253,7 @@ def train_REINFORCE():
     steps = 0
 
     for e in range(3000):
-        state = cw.reset()
+        state = env.reset()
         state = torch.Tensor(state).to(device).unsqueeze(0)
 
         terminate = False
@@ -216,7 +263,7 @@ def train_REINFORCE():
             steps += 1
 
             action = model.get_action(state)
-            next_state, reward, terminate = cw.take_action(action)
+            next_state, reward, terminate = env.take_action(action)
 
             next_state = torch.Tensor(next_state)
             next_state = next_state.unsqueeze(0)
@@ -229,8 +276,12 @@ def train_REINFORCE():
             replay_pool.push(state, next_state, action_one_hot, reward, mask)
 
             state = next_state
+            if isinstance(model, ActorCritic):
+                loss = model.train_model(model, replay_pool.sample(), optimizer)
 
-        loss = REINFORCE.train_model(model, replay_pool.sample(), optimizer)
+        if isinstance(model, REINFORCE):
+            loss = model.train_model(model, replay_pool.sample(), optimizer)
+
         print('[loss]episode %d: %.2f' % (e, loss))
 
         if e % test_interval == 0 and (not e == 0):
@@ -238,13 +289,13 @@ def train_REINFORCE():
             model.eval()
             for i in range(100):
                 terminate = False
-                state = cw.reset()
+                state = env.reset()
                 state = torch.Tensor(state).to(device)
                 state = state.unsqueeze(0)
                 score = 0
                 while not terminate:
                     action = model.get_action(state)
-                    next_state, reward, terminate = cw.take_action(action)
+                    next_state, reward, terminate = env.take_action(action)
                     score += reward
                 scores.append(score)
             model.train()
@@ -252,6 +303,13 @@ def train_REINFORCE():
 
 
 if __name__ == '__main__':
-    train_REINFORCE()
-    # cw = CliffWalking()
-    # test_cliff_warlking_by_hand(cw)
+    cw = CliffWalking()
+    input_dim = cw.state_dim
+    output_dim = cw.num_actions
+    print('state size:', input_dim)
+    print('action size:', output_dim)
+
+    # model = REINFORCE(input_dim, output_dim)
+    model = ActorCritic(input_dim, output_dim)
+
+    train_model(cw, model)
