@@ -206,7 +206,6 @@ def train_REINFORCE():
     steps = 0
 
     for e in range(3000):
-        score = 0
         state = cw.reset()
         state = torch.Tensor(state).to(device).unsqueeze(0)
 
@@ -223,34 +222,33 @@ def train_REINFORCE():
             next_state = next_state.unsqueeze(0)
 
             mask = 0 if terminate else 1
-            reward = reward if not terminate or score == -14 else -1
+            reward = reward if not terminate else -1000
 
             action_one_hot = torch.zeros(output_dim)
             action_one_hot[action] = 1
             replay_pool.push(state, next_state, action_one_hot, reward, mask)
 
-            score += reward
             state = next_state
 
         loss = REINFORCE.train_model(model, replay_pool.sample(), optimizer)
         print('[loss]episode %d: %.2f' % (e, loss))
 
         if e % test_interval == 0 and (not e == 0):
-            returns = []
+            scores = []
             model.eval()
             for i in range(100):
                 terminate = False
                 state = cw.reset()
                 state = torch.Tensor(state).to(device)
                 state = state.unsqueeze(0)
-                total_return = 0
+                score = 0
                 while not terminate:
                     action = model.get_action(state)
                     next_state, reward, terminate = cw.take_action(action)
-                    total_return += reward
-                returns.append(total_return)
+                    score += reward
+                scores.append(score)
             model.train()
-            print('[test return]episode %d: %.2f' % (e, np.mean(np.asarray(returns))))
+            print('[test score]episode %d: %.2f' % (e, np.mean(np.asarray(scores))))
 
 
 if __name__ == '__main__':
