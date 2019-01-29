@@ -250,7 +250,7 @@ def train_REINFORCE():
                     total_return += reward
                 returns.append(total_return)
             model.train()
-            print(e, np.mean(np.asarray(returns)))
+            print('[test return]episode %d: %.2f' % (e, np.mean(np.asarray(returns))))
 
 
 if __name__ == '__main__':
