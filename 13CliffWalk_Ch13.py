@@ -8,13 +8,13 @@ from collections import namedtuple, deque
 
 # configurations
 gamma = 1.00
-lr = 2e-12
+lr = 2e-14
 best_score = -14
 log_interval = 10
 test_interval = 20
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 Transition = namedtuple('Transition', ('state', 'next_state', 'action', 'reward', 'mask'))
-torch.manual_seed(2333)
+torch.manual_seed(666)
 np.random.seed(1234)
 
 
@@ -80,12 +80,13 @@ class CliffWalking(object):
 
         if old_pos[0] == self.shape[0] - 1 and old_pos[1] == self.shape[1] - 1:
             terminate = True
+            reward = 100.
 
         return new_pos, reward, terminate
 
     def take_action(self, action):
         if self.steps > self.step_limit:
-            return self.pos, -100, True
+            return self.pos, -100., True
         if isinstance(action, str):
             new_pos, reward, terminate = self.transmit_tensor[self.pos[0]][self.pos[1]][self.actions[action]]
         else:
@@ -107,7 +108,7 @@ class CliffWalking(object):
 
 
 class REINFORCE(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=48):
+    def __init__(self, input_dim, output_dim, hidden_dim=96):
         super(REINFORCE, self).__init__()
 
         self.input_dim = input_dim
@@ -227,6 +228,9 @@ class ReplayPool(object):
         memory = self.memory
         return Transition(*zip(*memory))
 
+    def reset(self):
+        self.memory = deque()
+
     def __len__(self):
         return len(self.memory)
 
@@ -250,17 +254,19 @@ def train_REINFORCE(env):
 
     model.to(device)
     model.train()
-    steps = 0
+    replay_pool = ReplayPool()
 
     for e in range(3000):
         state = env.reset()
         state = torch.Tensor(state).to(device).unsqueeze(0)
 
         terminate = False
-        replay_pool = ReplayPool()
+
+        if e % 100 == 0:
+            replay_pool.reset()
+
         # create an episode
         while not terminate:
-            steps += 1
 
             action = model.get_action(state)
             next_state, reward, terminate = env.take_action(action)
@@ -269,7 +275,6 @@ def train_REINFORCE(env):
             next_state = next_state.unsqueeze(0)
 
             mask = 0 if terminate else 1
-            reward = reward if not terminate else -1000
 
             action_one_hot = torch.zeros(output_dim)
             action_one_hot[action] = 1
@@ -279,7 +284,7 @@ def train_REINFORCE(env):
 
         loss = model.train_model(model, replay_pool.sample(), optimizer)
 
-        print('[loss]episode %d: %.2f' % (e, loss))
+        # print('[loss]episode %d: %.2f' % (e, loss))
 
         if e % test_interval == 0 and (not e == 0):
             scores = []
@@ -356,5 +361,6 @@ if __name__ == '__main__':
     print('state size:', input_dim)
     print('action size:', output_dim)
 
-    # train_REINFORCE(cw)
-    train_ActorCritic(cw)
+    train_REINFORCE(cw)
+    # train_ActorCritic(cw)
+    # test_cliff_warlking_by_hand(cw)
