@@ -224,7 +224,7 @@ class ReplayPool(object):
     def push(self, state, next_state, action, reward, mask):
         self.memory.append(Transition(state, next_state, action, reward, mask))
 
-    def sample(self):
+    def pop_all(self):
         memory = self.memory
         return Transition(*zip(*memory))
 
@@ -282,7 +282,7 @@ def train_REINFORCE(env):
 
             state = next_state
 
-        loss = model.train_model(model, replay_pool.sample(), optimizer)
+        loss = model.train_model(model, replay_pool.pop_all(), optimizer)
 
         # print('[loss]episode %d: %.2f' % (e, loss))
 
