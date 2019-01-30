@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 import torch.optim as optim
 from collections import namedtuple, deque
 
@@ -19,12 +20,11 @@ np.random.seed(1234)
 
 
 class CliffWalking(object):
-    def __init__(self, step_limit=50):
+    def __init__(self, step_limit=100):
         self.shape = (4, 12)
 
         # always start from the left-dow corner
-        # self.pos = np.asarray([self.shape[0] - 1, 0])
-        self.pos = np.asarray([2, 11])
+        self.pos = np.asarray([self.shape[0] - 1, 0])
 
         # build a
         self.cliff = np.zeros(self.shape, dtype=np.bool)
@@ -152,20 +152,22 @@ class REINFORCE(nn.Module):
 
         log_policies = (torch.log(policies) * actions.detach()).sum(dim=1)
 
-        loss = (-log_policies * returns).sum()
-
         optimizer.zero_grad()
+        loss = (-log_policies * returns).sum()
+        loss = Variable(torch.Tensor([loss]), requires_grad=True)
         loss.backward()
         optimizer.step()
 
         return loss
 
-    def get_action(self, state):
+    def get_action(self, state, test=False):
         policy = self.forward(state)
         policy = policy[0].data.numpy()
 
-        # action = np.random.choice(self.output_dim, 1, p=policy)[0]
-        action = np.random.randint(4)
+        if test:
+            action = np.argmax(policy)
+        else:
+            action = np.random.choice(self.output_dim, 1, p=policy)[0]
         return action
 
 
@@ -214,11 +216,14 @@ class ActorCritic(nn.Module):
 
         return loss
 
-    def get_action(self, state):
+    def get_action(self, state, test=False):
         policy, _ = self.forward(state)
         policy = policy[0].data.numpy()
 
-        action = np.random.choice(self.output_dim, 1, p=policy)[0]
+        if test:
+            action = np.argmax(policy)
+        else:
+            action = np.random.choice(policy, p=policy)
         return action
 
 
@@ -288,7 +293,7 @@ def train_REINFORCE(env):
 
         loss = model.train_model(model, replay_pool.pop_all(), optimizer)
 
-        print('[loss]episode %d: %.2f' % (e, loss))
+        # print('[loss]episode %d: %.2f' % (e, loss))
 
         if e % test_interval == 0 and (not e == 0):
             scores = []
@@ -300,7 +305,7 @@ def train_REINFORCE(env):
                 state = state.unsqueeze(0)
                 score = 0
                 while not terminate:
-                    action = model.get_action(state)
+                    action = model.get_action(state, test=True)
                     next_state, reward, terminate = env.take_action(action)
                     score += reward
                 scores.append(score)
