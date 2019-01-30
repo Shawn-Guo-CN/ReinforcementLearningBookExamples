@@ -262,8 +262,7 @@ def train_REINFORCE(env):
 
         terminate = False
 
-        if e % 100 == 0:
-            replay_pool.reset()
+        replay_pool.reset()
 
         # create an episode
         while not terminate:
@@ -284,7 +283,7 @@ def train_REINFORCE(env):
 
         loss = model.train_model(model, replay_pool.pop_all(), optimizer)
 
-        # print('[loss]episode %d: %.2f' % (e, loss))
+        print('[loss]episode %d: %.2f' % (e, loss))
 
         if e % test_interval == 0 and (not e == 0):
             scores = []
