@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 import torch.optim as optim
 from collections import namedtuple, deque
 
@@ -154,7 +153,7 @@ class REINFORCE(nn.Module):
 
         optimizer.zero_grad()
         loss = (-log_policies * returns).sum()
-        loss = Variable(torch.Tensor([loss]), requires_grad=True)
+        # loss = Variable(torch.Tensor([loss]), requires_grad=True)
         loss.backward()
         optimizer.step()
 
@@ -223,7 +222,7 @@ class ActorCritic(nn.Module):
         if test:
             action = np.argmax(policy)
         else:
-            action = np.random.choice(policy, p=policy)
+            action = np.random.choice(self.output_dim, 1, p=policy)[0]
         return action
 
 
@@ -293,7 +292,7 @@ def train_REINFORCE(env):
 
         loss = model.train_model(model, replay_pool.pop_all(), optimizer)
 
-        # print('[loss]episode %d: %.2f' % (e, loss))
+        print('[loss]episode %d: %.2f' % (e, loss))
 
         if e % test_interval == 0 and (not e == 0):
             scores = []
