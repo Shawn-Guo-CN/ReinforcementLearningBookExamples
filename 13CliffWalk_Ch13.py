@@ -23,7 +23,8 @@ class CliffWalking(object):
         self.shape = (4, 12)
 
         # always start from the left-dow corner
-        self.pos = np.asarray([self.shape[0] - 1, 0])
+        # self.pos = np.asarray([self.shape[0] - 1, 0])
+        self.pos = np.asarray([2, 11])
 
         # build a
         self.cliff = np.zeros(self.shape, dtype=np.bool)
@@ -81,6 +82,8 @@ class CliffWalking(object):
         if old_pos[0] == self.shape[0] - 1 and old_pos[1] == self.shape[1] - 1:
             terminate = True
             reward = 100.
+            new_pos[0] = self.shape[0] - 1
+            new_pos[1] = self.shape[1] - 1
 
         return new_pos, reward, terminate
 
@@ -102,7 +105,8 @@ class CliffWalking(object):
         print(env)
 
     def reset(self):
-        self.pos = np.asarray([self.shape[0] - 1, 0])
+        # self.pos = np.asarray([self.shape[0] - 1, 0])
+        self.pos = np.asarray([2, 11])
         self.steps = 0
         return self.pos
 
@@ -160,7 +164,8 @@ class REINFORCE(nn.Module):
         policy = self.forward(state)
         policy = policy[0].data.numpy()
 
-        action = np.random.choice(self.output_dim, 1, p=policy)[0]
+        # action = np.random.choice(self.output_dim, 1, p=policy)[0]
+        action = np.random.randint(4)
         return action
 
 
