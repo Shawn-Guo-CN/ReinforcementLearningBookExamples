@@ -24,7 +24,14 @@ However, there still exists bug in *maybe* **get_expected_return** function.
     - [x] *policy_improve* in Agent class
     - [ ] **debug!!!**
     
-4. *13CliffWalking_Ch13.py*: code script for cliff walking problem in Chapter 13 with
+4. *6CliffWalk_Ch6.py*: code script for handling cliff walking problem in 
+Chapter 6 by SARSA and Q-LEANING.
+    - [x] CliffWalk, lass simulaitng the cliff walking game
+    - [x] Q_net, class to store q-values
+    - [x] train_sarsa, function to estimate q values by SARSA
+    - [x] train_q_learning, function to estimate q values by Q-learning
+    
+5. *13CliffWalking_Ch13.py*: code script for cliff walking problem in Chapter 13 with
 various methods.
     - [x] CliffWalk, class simulaitng the cliff walking game
     - [ ] REINFORCE

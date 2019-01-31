@@ -214,6 +214,6 @@ def train_q_learning(env, model):
 if __name__ == '__main__':
     cw = CliffWalking()
     q_net = Q_net()
-    # train_sarsa(cw, q_net)
+    train_sarsa(cw, q_net)
     train_q_learning(cw, q_net)
     # test_cliff_warlking_by_hand(cw)
