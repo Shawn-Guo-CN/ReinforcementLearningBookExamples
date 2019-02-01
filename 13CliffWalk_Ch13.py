@@ -1,4 +1,3 @@
-import pprint
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,18 +7,18 @@ from collections import namedtuple, deque
 
 # configurations
 gamma = 1.00
-lr = 2e-14
+lr = 1e-3
 best_score = -14
 log_interval = 10
-test_interval = 100
+test_interval = 20
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 Transition = namedtuple('Transition', ('state', 'next_state', 'action', 'reward', 'mask'))
 torch.manual_seed(1234)
-np.random.seed(2333)
+np.random.seed(1234)
 
 
 class CliffWalking(object):
-    def __init__(self):
+    def __init__(self, step_limit=50):
         self.shape = (4, 12)
 
         # always start from the left-dow corner
@@ -48,6 +47,10 @@ class CliffWalking(object):
         self.num_actions = len(self.actions)
         self.state_dim = 2
 
+        # game rules added by Shawn
+        self.steps = 0
+        self.step_limit = step_limit
+
     def _build_transmit_tensor_(self):
         trans_matrix = [[[] for _ in range(self.shape[1])] for __ in range(self.shape[0])]
         for i in range(self.shape[0]):
@@ -72,7 +75,6 @@ class CliffWalking(object):
             reward = -100.
             new_pos[0] = self.shape[0] - 1
             new_pos[1] = 0
-            terminate = True
 
         if old_pos[0] == self.shape[0] - 1 and old_pos[1] == self.shape[1] - 1:
             terminate = True
@@ -89,7 +91,6 @@ class CliffWalking(object):
             new_pos, reward, terminate = self.transmit_tensor[self.pos[0]][self.pos[1]][action]
         self.pos[0] = new_pos[0]
         self.pos[1] = new_pos[1]
-
         return new_pos, reward, terminate
 
     def show_pos(self):
@@ -98,13 +99,13 @@ class CliffWalking(object):
         print(env)
 
     def reset(self):
-        self.pos = np.asarray([self.shape[0] - 1, 0])
-        self.steps = 0
+        # self.pos = np.asarray([self.shape[0] - 1, 0])
+        self.pos = np.asarray([2, 10])
         return self.pos
 
 
 class REINFORCE(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=96):
+    def __init__(self, input_dim, output_dim, hidden_dim=192):
         super(REINFORCE, self).__init__()
 
         self.input_dim = input_dim
@@ -119,7 +120,7 @@ class REINFORCE(nn.Module):
                 nn.init.xavier_uniform_(m.weight)
 
     def forward(self, x):
-        x = F.selu(self.fc1(x))
+        x = F.relu(self.fc1(x))
         policy = F.softmax(self.fc2(x))
         return policy
 
@@ -252,7 +253,7 @@ def test_cliff_warlking_by_hand(cw):
 def train_REINFORCE(env):
     model = REINFORCE(48, env.num_actions)
 
-    optimizer = optim.RMSprop(model.parameters(), lr=lr)
+    optimizer = optim.Adadelta(model.parameters(), lr=lr)
 
     model.to(device)
     model.train()
@@ -260,9 +261,7 @@ def train_REINFORCE(env):
 
     for e in range(3000):
         state = env.reset()
-
         terminate = False
-
         replay_pool.reset()
 
         # create an episode
@@ -270,7 +269,6 @@ def train_REINFORCE(env):
             state_one_hot = np.zeros(48)
             state_one_hot[state[0] * 12 + state[1]] = 1.
             state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
-
 
             action = model.get_action(state_one_hot)
             next_state, reward, terminate = env.take_action(action)
@@ -291,25 +289,24 @@ def train_REINFORCE(env):
 
         print('[loss]episode %d: %.2f' % (e, loss))
 
-        if e % test_interval == 0 and (not e == 0):
+        if e % test_interval == 0 and not e == 0:
             scores = []
-            model.eval()
-            for i in range(100):
-                print('test', i)
+            for _ in range(100):
                 terminate = False
+                score = 0.
                 state = env.reset()
-                score = 0
                 while not terminate:
                     state_one_hot = np.zeros(48)
                     state_one_hot[state[0] * 12 + state[1]] = 1.
                     state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
-                    action = model.get_action(state_one_hot, test=True)
+                    action = model.get_action(state_one_hot)
                     next_state, reward, terminate = env.take_action(action)
                     score += reward
                     state = next_state
                 scores.append(score)
-            model.train()
-            print('[test score]episode %d: %.2f' % (e, np.mean(np.asarray(scores))))
+
+            scores = np.asarray(scores)
+            print(e, np.mean(scores))
 
 
 def train_ActorCritic(env):
