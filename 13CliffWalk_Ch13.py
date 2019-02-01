@@ -11,15 +11,15 @@ gamma = 1.00
 lr = 2e-14
 best_score = -14
 log_interval = 10
-test_interval = 20
+test_interval = 100
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 Transition = namedtuple('Transition', ('state', 'next_state', 'action', 'reward', 'mask'))
-torch.manual_seed(666)
-np.random.seed(1234)
+torch.manual_seed(1234)
+np.random.seed(2333)
 
 
 class CliffWalking(object):
-    def __init__(self, step_limit=100):
+    def __init__(self):
         self.shape = (4, 12)
 
         # always start from the left-dow corner
@@ -47,10 +47,6 @@ class CliffWalking(object):
 
         self.num_actions = len(self.actions)
         self.state_dim = 2
-
-        # this is a rule added by Shawn
-        self.steps = 0
-        self.step_limit = step_limit
 
     def _build_transmit_tensor_(self):
         trans_matrix = [[[] for _ in range(self.shape[1])] for __ in range(self.shape[0])]
@@ -80,22 +76,20 @@ class CliffWalking(object):
 
         if old_pos[0] == self.shape[0] - 1 and old_pos[1] == self.shape[1] - 1:
             terminate = True
-            reward = 100.
+            reward = 0.
             new_pos[0] = self.shape[0] - 1
             new_pos[1] = self.shape[1] - 1
 
         return new_pos, reward, terminate
 
     def take_action(self, action):
-        if self.steps > self.step_limit:
-            return self.pos, -100., True
         if isinstance(action, str):
             new_pos, reward, terminate = self.transmit_tensor[self.pos[0]][self.pos[1]][self.actions[action]]
         else:
             new_pos, reward, terminate = self.transmit_tensor[self.pos[0]][self.pos[1]][action]
         self.pos[0] = new_pos[0]
         self.pos[1] = new_pos[1]
-        self.steps += 1
+
         return new_pos, reward, terminate
 
     def show_pos(self):
@@ -104,8 +98,7 @@ class CliffWalking(object):
         print(env)
 
     def reset(self):
-        # self.pos = np.asarray([self.shape[0] - 1, 0])
-        self.pos = np.asarray([2, 11])
+        self.pos = np.asarray([self.shape[0] - 1, 0])
         self.steps = 0
         return self.pos
 
@@ -153,7 +146,7 @@ class REINFORCE(nn.Module):
 
         optimizer.zero_grad()
         loss = (-log_policies * returns).sum()
-        # loss = Variable(torch.Tensor([loss]), requires_grad=True)
+
         loss.backward()
         optimizer.step()
 
@@ -257,7 +250,7 @@ def test_cliff_warlking_by_hand(cw):
 
 
 def train_REINFORCE(env):
-    model = REINFORCE(env.state_dim, env.num_actions)
+    model = REINFORCE(48, env.num_actions)
 
     optimizer = optim.RMSprop(model.parameters(), lr=lr)
 
@@ -267,7 +260,6 @@ def train_REINFORCE(env):
 
     for e in range(3000):
         state = env.reset()
-        state = torch.Tensor(state).to(device).unsqueeze(0)
 
         terminate = False
 
@@ -275,18 +267,23 @@ def train_REINFORCE(env):
 
         # create an episode
         while not terminate:
+            state_one_hot = np.zeros(48)
+            state_one_hot[state[0] * 12 + state[1]] = 1.
+            state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
 
-            action = model.get_action(state)
+
+            action = model.get_action(state_one_hot)
             next_state, reward, terminate = env.take_action(action)
-
-            next_state = torch.Tensor(next_state)
-            next_state = next_state.unsqueeze(0)
 
             mask = 0 if terminate else 1
 
+            next_state_one_hot = np.zeros(48)
+            next_state_one_hot[next_state[0] *12 + next_state[1]] = 1.0
+            next_state_one_hot = torch.Tensor(next_state_one_hot).to(device).unsqueeze(0)
+
             action_one_hot = torch.zeros(output_dim)
             action_one_hot[action] = 1
-            replay_pool.push(state, next_state, action_one_hot, reward, mask)
+            replay_pool.push(state_one_hot, next_state_one_hot, action_one_hot, reward, mask)
 
             state = next_state
 
@@ -298,15 +295,18 @@ def train_REINFORCE(env):
             scores = []
             model.eval()
             for i in range(100):
+                print('test', i)
                 terminate = False
                 state = env.reset()
-                state = torch.Tensor(state).to(device)
-                state = state.unsqueeze(0)
                 score = 0
                 while not terminate:
-                    action = model.get_action(state, test=True)
+                    state_one_hot = np.zeros(48)
+                    state_one_hot[state[0] * 12 + state[1]] = 1.
+                    state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
+                    action = model.get_action(state_one_hot, test=True)
                     next_state, reward, terminate = env.take_action(action)
                     score += reward
+                    state = next_state
                 scores.append(score)
             model.train()
             print('[test score]episode %d: %.2f' % (e, np.mean(np.asarray(scores))))
@@ -320,7 +320,7 @@ def train_ActorCritic(env):
     model.to(device)
     model.train()
 
-    for e in range(3000):
+    for e in range(1000):
         state = env.reset()
         state = torch.Tensor(state).to(device).unsqueeze(0)
 
@@ -364,7 +364,7 @@ def train_ActorCritic(env):
 
 if __name__ == '__main__':
     cw = CliffWalking()
-    input_dim = cw.state_dim
+    input_dim = 48
     output_dim = cw.num_actions
     print('state size:', input_dim)
     print('action size:', output_dim)
