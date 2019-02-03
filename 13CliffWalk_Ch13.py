@@ -18,7 +18,7 @@ np.random.seed(1234)
 
 
 class CliffWalking(object):
-    def __init__(self, step_limit=50):
+    def __init__(self):
         self.shape = (4, 12)
 
         # always start from the left-dow corner
@@ -47,10 +47,6 @@ class CliffWalking(object):
         self.num_actions = len(self.actions)
         self.state_dim = 2
 
-        # game rules added by Shawn
-        self.steps = 0
-        self.step_limit = step_limit
-
     def _build_transmit_tensor_(self):
         trans_matrix = [[[] for _ in range(self.shape[1])] for __ in range(self.shape[0])]
         for i in range(self.shape[0]):
@@ -75,6 +71,7 @@ class CliffWalking(object):
             reward = -100.
             new_pos[0] = self.shape[0] - 1
             new_pos[1] = 0
+            terminate = False
 
         if old_pos[0] == self.shape[0] - 1 and old_pos[1] == self.shape[1] - 1:
             terminate = True
@@ -99,13 +96,12 @@ class CliffWalking(object):
         print(env)
 
     def reset(self):
-        # self.pos = np.asarray([self.shape[0] - 1, 0])
-        self.pos = np.asarray([2, 10])
+        self.pos = np.asarray([self.shape[0] - 1, 0])
         return self.pos
 
 
 class REINFORCE(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=192):
+    def __init__(self, input_dim, output_dim, hidden_dim=96):
         super(REINFORCE, self).__init__()
 
         self.input_dim = input_dim
@@ -173,7 +169,7 @@ class ActorCritic(nn.Module):
 
         self.fc_hidden = nn.Linear(input_dim, hidden_dim)
         self.fc_actor = nn.Linear(hidden_dim, output_dim)
-        self.fc_critic = nn.Linear(hidden_dim, output_dim)
+        self.fc_critic = nn.Linear(hidden_dim, 1)
 
         for m in self.modules():
             # in case add more modules later
@@ -191,16 +187,16 @@ class ActorCritic(nn.Module):
         state, next_state, action, reward, mask = transition
 
         policy, q_value = model(state)
-        policy, q_value = policy.view(-1, model.output_dim), q_value.view(-1, model.output_dim)
+        policy, q_value = policy.view(-1, model.output_dim), q_value.view(-1, 1)
         _, next_q_value = model(next_state)
-        next_q_value = next_q_value.view(-1, model.output_dim)
+        next_q_value = next_q_value.view(-1, 1)
         next_action = model.get_action(next_state)
 
-        target = reward + mask * gamma * next_q_value[0][next_action]
+        target = reward + mask * gamma * next_q_value[0]
 
         log_policy = torch.log(policy[0])[action]
-        loss_policy = - log_policy * q_value[0][action].item()
-        loss_value = F.mse_loss(q_value[0][action], target.detach())
+        loss_policy = -log_policy * q_value[0]
+        loss_value = F.mse_loss(q_value[0], target.detach())
 
         loss = loss_policy + loss_value
         optimizer.zero_grad()
@@ -250,6 +246,13 @@ def test_cliff_warlking_by_hand(cw):
         cw.show_pos()
 
 
+def convert_state2onehot(state):
+    state_one_hot = np.zeros(48)
+    state_one_hot[state[0] * 12 + state[1]] = 1.
+    state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
+    return state_one_hot
+
+
 def train_REINFORCE(env):
     model = REINFORCE(48, env.num_actions)
 
@@ -266,18 +269,14 @@ def train_REINFORCE(env):
 
         # create an episode
         while not terminate:
-            state_one_hot = np.zeros(48)
-            state_one_hot[state[0] * 12 + state[1]] = 1.
-            state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
+            state_one_hot = convert_state2onehot(state)
 
             action = model.get_action(state_one_hot)
             next_state, reward, terminate = env.take_action(action)
 
             mask = 0 if terminate else 1
 
-            next_state_one_hot = np.zeros(48)
-            next_state_one_hot[next_state[0] *12 + next_state[1]] = 1.0
-            next_state_one_hot = torch.Tensor(next_state_one_hot).to(device).unsqueeze(0)
+            next_state_one_hot = convert_state2onehot(next_state)
 
             action_one_hot = torch.zeros(output_dim)
             action_one_hot[action] = 1
@@ -310,7 +309,7 @@ def train_REINFORCE(env):
 
 
 def train_ActorCritic(env):
-    model = ActorCritic(env.state_dim, env.num_actions)
+    model = ActorCritic(48, env.num_actions)
 
     optimizer = optim.RMSprop(model.parameters(), lr=lr)
 
@@ -319,27 +318,31 @@ def train_ActorCritic(env):
 
     for e in range(1000):
         state = env.reset()
-        state = torch.Tensor(state).to(device).unsqueeze(0)
 
         terminate = False
+        running_loss = 0.
         # create an episode
         while not terminate:
-            action = model.get_action(state)
+            state_one_hot = np.zeros(48)
+            state_one_hot[state[0] * 12 + state[1]] = 1.
+            state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
+
+            action = model.get_action(state_one_hot)
             next_state, reward, terminate = env.take_action(action)
 
-            next_state = torch.Tensor(next_state).to(device).unsqueeze(0)
+            next_state_onehot = convert_state2onehot(next_state)
 
             mask = 0 if terminate else 1
-            reward = reward if not terminate else -100
 
             action_one_hot = torch.zeros(output_dim)
             action_one_hot[action] = 1
-            transition = [state, next_state, action, reward, mask]
+            transition = [state_one_hot, next_state_onehot, action, reward, mask]
 
             state = next_state
             loss = model.train_model(model, transition, optimizer)
+            running_loss += loss
 
-        print('[loss]episode %d: %.2f' % (e, loss))
+        print('[loss]episode %d: %.2f' % (e, running_loss))
 
         if e % test_interval == 0 and (not e == 0):
             scores = []
@@ -354,6 +357,7 @@ def train_ActorCritic(env):
                     action = model.get_action(state)
                     next_state, reward, terminate = env.take_action(action)
                     score += reward
+                    state = next_state
                 scores.append(score)
             model.train()
             print('[test score]episode %d: %.2f' % (e, np.mean(np.asarray(scores))))
@@ -366,6 +370,6 @@ if __name__ == '__main__':
     print('state size:', input_dim)
     print('action size:', output_dim)
 
-    train_REINFORCE(cw)
-    # train_ActorCritic(cw)
+    # train_REINFORCE(cw)
+    train_ActorCritic(cw)
     # test_cliff_warlking_by_hand(cw)
