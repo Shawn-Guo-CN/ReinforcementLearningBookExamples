@@ -5,12 +5,12 @@ from collections import namedtuple, deque
 gamma = 1.0
 alpha = 0.5
 Transition = namedtuple('Transition', ('state', 'next_state', 'action', 'reward'))
-log_internal = 2
-np.random.seed(2333)
+log_internal = 50
+np.random.seed(12345)
 
 
 class CliffWalking(object):
-    def __init__(self, step_limit=50):
+    def __init__(self):
         self.shape = (4, 12)
 
         # always start from the left-dow corner
@@ -38,10 +38,6 @@ class CliffWalking(object):
 
         self.num_actions = len(self.actions)
         self.state_dim = 2
-
-        # game rules added by Shawn
-        self.steps = 0
-        self.step_limit = step_limit
 
     def _build_transmit_tensor_(self):
         trans_matrix = [[[] for _ in range(self.shape[1])] for __ in range(self.shape[0])]
@@ -78,9 +74,6 @@ class CliffWalking(object):
         return new_pos, reward, terminate
 
     def take_action(self, action):
-        self.steps += 1
-        if self.steps > self.step_limit:
-            return self.pos, -100., True
         if isinstance(action, str):
             new_pos, reward, terminate = self.transmit_tensor[self.pos[0]][self.pos[1]][self.actions[action]]
         else:
@@ -95,7 +88,6 @@ class CliffWalking(object):
         print(env)
 
     def reset(self):
-        self.steps = 0
         self.pos = np.asarray([self.shape[0] - 1, 0])
         return self.pos
 
@@ -122,9 +114,9 @@ class Q_net(object):
                 for a in range(num_actions):
                     self.q_est[i][j].append(0.)
 
-    def get_action(self, state, test=False):
+    def get_action(self, state, epsilon=1e-2, test=False):
         state = state.tolist()
-        if np.random.uniform() > self.epsilon or test:
+        if np.random.uniform() > epsilon or test:
             return np.argmax(self.q_est[state[0]][state[1]])
         else:
             return np.random.randint(4)
@@ -150,18 +142,32 @@ class Q_net(object):
 
 
 def train_sarsa(env, model):
+    alpha = 0.5
+    epsilon = 1e-2
+
+    running_rewards = []
+
     for e in range(3000):
         state = env.reset()
 
+        if e % 50 == 0 and not e == 0:
+            alpha = alpha * 0.01
+            epsilon = epsilon * 0.01
+
         terminate = False
+        running_reward = 0.
         # create an episode
         while not terminate:
-            action = model.get_action(state)
+            action = model.get_action(state, epsilon=epsilon)
             next_state, reward, terminate = env.take_action(action)
             transition = [state, next_state, action, reward]
             state = next_state
+            running_reward += reward
 
-            model.train_by_sarsa(model, transition)
+            model.train_by_sarsa(model, transition, alpha=alpha)
+
+        print(e, running_reward)
+        running_rewards.append(running_reward)
 
         if e % log_internal == 0 and not e == 0:
             rewards = []
@@ -177,22 +183,37 @@ def train_sarsa(env, model):
                 rewards.append(total_reward)
 
             rewards = np.asarray(rewards)
+            print(rewards)
             print(e, np.mean(rewards))
 
 
 def train_q_learning(env, model):
+    alpha = 0.5
+    epsilon = 1e-2
+
+    running_rewards = []
+
     for e in range(3000):
         state = env.reset()
 
+        if e % 50 == 0 and not e == 0:
+            alpha = alpha * 0.01
+            epsilon = epsilon * 0.01
+
         terminate = False
+        running_reward = 0.
         # create an episode
         while not terminate:
-            action = model.get_action(state)
+            action = model.get_action(state, epsilon=epsilon)
             next_state, reward, terminate = env.take_action(action)
             transition = [state, next_state, action, reward]
             state = next_state
+            running_reward += reward
 
-            model.train_by_q_learning(model, transition)
+            model.train_by_q_learning(model, transition, alpha=alpha)
+
+        print(e, running_reward)
+        running_rewards.append(running_reward)
 
         if e % log_internal == 0 and not e == 0:
             rewards = []
@@ -215,5 +236,6 @@ if __name__ == '__main__':
     cw = CliffWalking()
     q_net = Q_net()
     train_sarsa(cw, q_net)
+    q_net = Q_net()
     train_q_learning(cw, q_net)
     # test_cliff_warlking_by_hand(cw)
