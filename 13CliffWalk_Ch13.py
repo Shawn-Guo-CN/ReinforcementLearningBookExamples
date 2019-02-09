@@ -4,22 +4,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from collections import namedtuple, deque
+from torch.distributions import Categorical
 
 # configurations
 gamma = 1.00
-lr = 1e-2
+lr = 1e-9
 best_score = -14
 log_interval = 10
 test_interval = 20
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 Transition = namedtuple('Transition', ('state', 'next_state', 'action', 'reward', 'mask'))
-torch.manual_seed(1234)
-np.random.seed(1234)
+torch.manual_seed(1111)
+np.random.seed(1111)
 
 
 class CliffWalking(object):
     def __init__(self):
-        self.shape = (4, 12)
+        self.shape = (4, 5)
 
         # always start from the left-dow corner
         self.pos = np.asarray([self.shape[0] - 1, 0])
@@ -101,7 +102,7 @@ class CliffWalking(object):
 
 
 class REINFORCE(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=96):
+    def __init__(self, input_dim, output_dim, hidden_dim=256):
         super(REINFORCE, self).__init__()
 
         self.input_dim = input_dim
@@ -117,7 +118,7 @@ class REINFORCE(nn.Module):
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        policy = F.softmax(self.fc2(x))
+        policy = F.softmax(self.fc2(x), dim=-1)
         return policy
 
     @classmethod
@@ -147,21 +148,21 @@ class REINFORCE(nn.Module):
         loss.backward()
         optimizer.step()
 
+        del log_policies
+        del returns
+
         return loss
 
-    def get_action(self, state, test=False):
+    def get_action(self, state):
         policy = self.forward(state)
         policy = policy[0].data.numpy()
 
-        if test:
-            action = np.argmax(policy)
-        else:
-            action = np.random.choice(self.output_dim, 1, p=policy)[0]
+        action = np.random.choice(self.output_dim, 1, p=policy)[0]
         return action
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=48):
+    def __init__(self, input_dim, output_dim, hidden_dim=20):
         super(ActorCritic, self).__init__()
 
         self.input_dim = input_dim
@@ -178,7 +179,7 @@ class ActorCritic(nn.Module):
 
     def forward(self, x):
         x = F.selu(self.fc_hidden(x))
-        policy = F.softmax(self.fc_actor(x))
+        policy = F.softmax(self.fc_actor(x), dim=-1)
         value = self.fc_critic(x)
         return policy, value
 
@@ -191,27 +192,26 @@ class ActorCritic(nn.Module):
         _, next_value = model(next_state)
         next_value = next_value.view(-1, 1)
 
-        target = reward + mask * (gamma * next_value[0] - value[0])
+        target_plus_value = reward + mask * gamma * next_value[0]
+        target = target_plus_value - value[0]
 
         log_policy = torch.log(policy[0])[action]
-        loss_policy = -log_policy * value[0]
-        loss_value = F.mse_loss(value[0], target.detach())
+        loss_policy = - log_policy * target.detach()
+        loss_value = F.mse_loss(target_plus_value.detach(), value[0])
 
-        loss = loss_policy + loss_value
+        loss = (loss_policy + loss_value).mean()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         return loss
 
-    def get_action(self, state, test=False):
+    def get_action(self, state):
         policy, _ = self.forward(state)
         policy = policy[0].data.numpy()
 
-        if test:
-            action = np.argmax(policy)
-        else:
-            action = np.random.choice(self.output_dim, 1, p=policy)[0]
+        action = np.random.choice(self.output_dim, 1, p=policy)[0]
+
         return action
 
 
@@ -246,22 +246,22 @@ def test_cliff_warlking_by_hand(cw):
 
 
 def convert_state2onehot(state):
-    state_one_hot = np.zeros(48)
-    state_one_hot[state[0] * 12 + state[1]] = 1.
+    state_one_hot = np.zeros(20)
+    state_one_hot[state[0] * 5 + state[1]] = 1.
     state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
     return state_one_hot
 
 
 def train_REINFORCE(env):
-    model = REINFORCE(48, env.num_actions)
+    model = REINFORCE(20, env.num_actions)
 
-    optimizer = optim.Adadelta(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
     model.to(device)
     model.train()
     replay_pool = ReplayPool()
 
-    for e in range(3000):
+    for e in range(6000):
         state = env.reset()
         terminate = False
         replay_pool.reset()
@@ -294,8 +294,8 @@ def train_REINFORCE(env):
                 score = 0.
                 state = env.reset()
                 while not terminate:
-                    state_one_hot = np.zeros(48)
-                    state_one_hot[state[0] * 12 + state[1]] = 1.
+                    state_one_hot = np.zeros(20)
+                    state_one_hot[state[0] * 5 + state[1]] = 1.
                     state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
                     action = model.get_action(state_one_hot)
                     next_state, reward, terminate = env.take_action(action)
@@ -308,18 +308,19 @@ def train_REINFORCE(env):
 
 
 def train_ActorCritic(env):
-    model = ActorCritic(48, env.num_actions)
+    model = ActorCritic(20, env.num_actions)
 
-    optimizer = optim.RMSprop(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
     model.to(device)
     model.train()
 
-    for e in range(1000):
+    for e in range(6000):
         state = env.reset()
 
         terminate = False
         running_loss = 0.
+        running_steps = 0.
         # create an episode
         while not terminate:
             state_onehot = convert_state2onehot(state)
@@ -336,8 +337,9 @@ def train_ActorCritic(env):
             state = next_state
             loss = model.train_model(model, transition, optimizer)
             running_loss += loss
+            running_steps += 1
 
-        print('[loss]episode %d: %.2f' % (e, running_loss))
+        print('[loss]episode %d: %.2f' % (e, running_loss / running_steps))
 
         if e % test_interval == 0 and (not e == 0):
             scores = []
@@ -345,11 +347,10 @@ def train_ActorCritic(env):
             for i in range(100):
                 terminate = False
                 state = env.reset()
-                state = torch.Tensor(state).to(device)
-                state = state.unsqueeze(0)
                 score = 0
                 while not terminate:
-                    action = model.get_action(state)
+                    state_onehot = convert_state2onehot(state)
+                    action = model.get_action(state_onehot)
                     next_state, reward, terminate = env.take_action(action)
                     score += reward
                     state = next_state
@@ -360,7 +361,7 @@ def train_ActorCritic(env):
 
 if __name__ == '__main__':
     cw = CliffWalking()
-    input_dim = 48
+    input_dim = 20
     output_dim = cw.num_actions
     print('state size:', input_dim)
     print('action size:', output_dim)
