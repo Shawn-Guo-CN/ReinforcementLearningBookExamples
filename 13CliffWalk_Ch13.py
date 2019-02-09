@@ -7,7 +7,7 @@ from collections import namedtuple, deque
 
 # configurations
 gamma = 1.00
-lr = 1e-3
+lr = 1e-2
 best_score = -14
 log_interval = 10
 test_interval = 20
@@ -179,24 +179,23 @@ class ActorCritic(nn.Module):
     def forward(self, x):
         x = F.selu(self.fc_hidden(x))
         policy = F.softmax(self.fc_actor(x))
-        q_value = self.fc_critic(x)
-        return policy, q_value
+        value = self.fc_critic(x)
+        return policy, value
 
     @classmethod
     def train_model(cls, model, transition, optimizer, gamma=1.0):
         state, next_state, action, reward, mask = transition
 
-        policy, q_value = model(state)
-        policy, q_value = policy.view(-1, model.output_dim), q_value.view(-1, 1)
-        _, next_q_value = model(next_state)
-        next_q_value = next_q_value.view(-1, 1)
-        next_action = model.get_action(next_state)
+        policy, value = model(state)
+        policy, value = policy.view(-1, model.output_dim), value.view(-1, 1)
+        _, next_value = model(next_state)
+        next_value = next_value.view(-1, 1)
 
-        target = reward + mask * gamma * next_q_value[0]
+        target = reward + mask * (gamma * next_value[0] - value[0])
 
         log_policy = torch.log(policy[0])[action]
-        loss_policy = -log_policy * q_value[0]
-        loss_value = F.mse_loss(q_value[0], target.detach())
+        loss_policy = -log_policy * value[0]
+        loss_value = F.mse_loss(value[0], target.detach())
 
         loss = loss_policy + loss_value
         optimizer.zero_grad()
@@ -323,20 +322,16 @@ def train_ActorCritic(env):
         running_loss = 0.
         # create an episode
         while not terminate:
-            state_one_hot = np.zeros(48)
-            state_one_hot[state[0] * 12 + state[1]] = 1.
-            state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
-
-            action = model.get_action(state_one_hot)
+            state_onehot = convert_state2onehot(state)
+            action = model.get_action(state_onehot)
             next_state, reward, terminate = env.take_action(action)
-
             next_state_onehot = convert_state2onehot(next_state)
 
             mask = 0 if terminate else 1
 
             action_one_hot = torch.zeros(output_dim)
             action_one_hot[action] = 1
-            transition = [state_one_hot, next_state_onehot, action, reward, mask]
+            transition = [state_onehot, next_state_onehot, action, reward, mask]
 
             state = next_state
             loss = model.train_model(model, transition, optimizer)
