@@ -4,11 +4,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from collections import namedtuple, deque
-from torch.distributions import Categorical
 
 # configurations
 gamma = 1.00
-lr = 1e-9
+lr = 1e-4
 best_score = -14
 log_interval = 10
 test_interval = 20
@@ -20,7 +19,7 @@ np.random.seed(1111)
 
 class CliffWalking(object):
     def __init__(self):
-        self.shape = (4, 5)
+        self.shape = (4, 12)
 
         # always start from the left-dow corner
         self.pos = np.asarray([self.shape[0] - 1, 0])
@@ -196,7 +195,7 @@ class ActorCritic(nn.Module):
         target = target_plus_value - value[0]
 
         log_policy = torch.log(policy[0])[action]
-        loss_policy = - log_policy * target.detach()
+        loss_policy = -log_policy * target.detach()
         loss_value = F.mse_loss(target_plus_value.detach(), value[0])
 
         loss = (loss_policy + loss_value).mean()
@@ -210,7 +209,10 @@ class ActorCritic(nn.Module):
         policy, _ = self.forward(state)
         policy = policy[0].data.numpy()
 
-        action = np.random.choice(self.output_dim, 1, p=policy)[0]
+        try:
+            action = np.random.choice(self.output_dim, 1, p=policy)[0]
+        except:
+            action = np.random.choice(self.output_dim)[0]
 
         return action
 
@@ -245,15 +247,15 @@ def test_cliff_warlking_by_hand(cw):
         cw.show_pos()
 
 
-def convert_state2onehot(state):
-    state_one_hot = np.zeros(20)
+def convert_state2onehot(state, state_dim=48):
+    state_one_hot = np.zeros(state_dim)
     state_one_hot[state[0] * 5 + state[1]] = 1.
     state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
     return state_one_hot
 
 
-def train_REINFORCE(env):
-    model = REINFORCE(20, env.num_actions)
+def train_REINFORCE(env, state_shape=[4,12]):
+    model = REINFORCE(state_shape[0] * state_shape[1], env.num_actions)
 
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -268,14 +270,13 @@ def train_REINFORCE(env):
 
         # create an episode
         while not terminate:
-            state_one_hot = convert_state2onehot(state)
-
+            state_one_hot = convert_state2onehot(state, state_dim=state_shape[0] * state_shape[1])
             action = model.get_action(state_one_hot)
             next_state, reward, terminate = env.take_action(action)
 
             mask = 0 if terminate else 1
 
-            next_state_one_hot = convert_state2onehot(next_state)
+            next_state_one_hot = convert_state2onehot(next_state, state_dim=state_shape[0] * state_shape[1])
 
             action_one_hot = torch.zeros(output_dim)
             action_one_hot[action] = 1
@@ -294,9 +295,7 @@ def train_REINFORCE(env):
                 score = 0.
                 state = env.reset()
                 while not terminate:
-                    state_one_hot = np.zeros(20)
-                    state_one_hot[state[0] * 5 + state[1]] = 1.
-                    state_one_hot = torch.Tensor(state_one_hot).to(device).unsqueeze(0)
+                    state_one_hot = convert_state2onehot(state)
                     action = model.get_action(state_one_hot)
                     next_state, reward, terminate = env.take_action(action)
                     score += reward
@@ -307,8 +306,8 @@ def train_REINFORCE(env):
             print(e, np.mean(scores))
 
 
-def train_ActorCritic(env):
-    model = ActorCritic(20, env.num_actions)
+def train_ActorCritic(env, state_shape=[4,12]):
+    model = ActorCritic(state_shape[0] * state_shape[1], env.num_actions)
 
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -323,7 +322,7 @@ def train_ActorCritic(env):
         running_steps = 0.
         # create an episode
         while not terminate:
-            state_onehot = convert_state2onehot(state)
+            state_onehot = convert_state2onehot(state, state_dim=state_shape[0] * state_shape[1])
             action = model.get_action(state_onehot)
             next_state, reward, terminate = env.take_action(action)
             next_state_onehot = convert_state2onehot(next_state)
@@ -349,7 +348,7 @@ def train_ActorCritic(env):
                 state = env.reset()
                 score = 0
                 while not terminate:
-                    state_onehot = convert_state2onehot(state)
+                    state_onehot = convert_state2onehot(state, state_dim=state_shape[0] * state_shape[1])
                     action = model.get_action(state_onehot)
                     next_state, reward, terminate = env.take_action(action)
                     score += reward
@@ -361,7 +360,7 @@ def train_ActorCritic(env):
 
 if __name__ == '__main__':
     cw = CliffWalking()
-    input_dim = 20
+    input_dim = cw.shape[0] * cw.shape[1]
     output_dim = cw.num_actions
     print('state size:', input_dim)
     print('action size:', output_dim)
