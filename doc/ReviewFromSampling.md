@@ -5,7 +5,8 @@ methods in RL. Basically, what I want to discuss is the importance
 sampling and its application in off-policy methods.
 
 ## A Brief Recap on Off-policy Methods
-
+Briefly, off-policy methods aim to estimate/optimise a *target policy* 
+$\pi$ based on 
 
 ## 1st Case: Importance Sampling in Monte Carlo Methods
 
