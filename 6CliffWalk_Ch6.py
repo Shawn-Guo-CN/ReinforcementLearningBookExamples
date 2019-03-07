@@ -114,9 +114,9 @@ class Q_net(object):
                 for a in range(num_actions):
                     self.q_est[i][j].append(0.)
 
-    def get_action(self, state, epsilon=1e-2, test=False):
+    def get_action(self, state, epsilon=1e-2, greedy=False):
         state = state.tolist()
-        if np.random.uniform() > epsilon or test:
+        if np.random.uniform() > epsilon or greedy:
             return np.argmax(self.q_est[state[0]][state[1]])
         else:
             return np.random.randint(4)
@@ -124,7 +124,7 @@ class Q_net(object):
     @classmethod
     def train_by_sarsa(cls, model, transition, gamma=1.0, alpha=0.5):
         state, next_state, action, reward = transition
-        next_action = model.get_action(state)
+        next_action = model.get_action(next_state)
 
         model.q_est[state[0]][state[1]][action] += alpha * (reward
             + gamma * model.q_est[next_state[0]][next_state[1]][next_action]
@@ -133,7 +133,7 @@ class Q_net(object):
     @classmethod
     def train_by_q_learning(cls, model, transition, gamma=1.0, alpha=0.5):
         state, next_state, action, reward = transition
-        next_action = model.get_action(state, test=True)
+        next_action = model.get_action(next_state, greedy=True)
 
         model.q_est[state[0]][state[1]][action] += alpha * (reward
                                                             + gamma * model.q_est[next_state[0]][next_state[1]][
@@ -147,7 +147,7 @@ def train_sarsa(env, model):
 
     running_rewards = []
 
-    for e in range(3000):
+    for e in range(300):
         state = env.reset()
 
         if e % 50 == 0 and not e == 0:
@@ -176,7 +176,7 @@ def train_sarsa(env, model):
                 total_reward = 0.
                 state = env.reset()
                 while not terminate:
-                    action = model.get_action(state, test=True)
+                    action = model.get_action(state)
                     next_state, reward, terminate = env.take_action(action)
                     total_reward += reward
                     state = next_state
@@ -193,7 +193,7 @@ def train_q_learning(env, model):
 
     running_rewards = []
 
-    for e in range(3000):
+    for e in range(300):
         state = env.reset()
 
         if e % 50 == 0 and not e == 0:
@@ -222,7 +222,7 @@ def train_q_learning(env, model):
                 total_reward = 0.
                 state = env.reset()
                 while not terminate:
-                    action = model.get_action(state, test=True)
+                    action = model.get_action(state, greedy=True)
                     next_state, reward, terminate = env.take_action(action)
                     total_reward += reward
                     state = next_state
